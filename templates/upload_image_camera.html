@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheat Spike Detection</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+            color: white;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            max-width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Main Content Area */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 0;
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+        
+        /* Subtle Background Pattern */
+        .main-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(76, 175, 80, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(76, 175, 80, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        /* Image Panels */
+        .image-panel {
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(76, 175, 80, 0.1);
+        }
+        
+        .image-panel::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, 
+                rgba(0,0,0,0.3) 0%, 
+                transparent 20%, 
+                transparent 80%, 
+                rgba(0,0,0,0.3) 100%);
+            pointer-events: none;
+        }
+        
+        .image-panel img,
+        .image-panel video {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            filter: brightness(0.95) contrast(1.05);
+            transition: all 0.3s ease;
+        }
+        
+        .image-panel video {
+            display: none;
+        }
+        
+        .image-panel video.active {
+            display: block;
+        }
+        
+        .image-panel:hover img {
+            filter: brightness(1) contrast(1.1);
+            transform: scale(1.01);
+        }
+        
+        .placeholder {
+            color: #666;
+            font-size: 18px;
+            text-align: center;
+        }
+        
+        .image-panel.has-image .placeholder {
+            display: none;
+        }
+        
+        /* Middle Panel - Process Steps */
+        .process-panel {
+            background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%);
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 50px 35px;
+            border-left: 1px solid rgba(76, 175, 80, 0.15);
+            border-right: 1px solid rgba(76, 175, 80, 0.15);
+            position: relative;
+            box-shadow: 
+                inset 0 1px 0 rgba(255,255,255,0.03),
+                0 0 40px rgba(0,0,0,0.5);
+        }
+        
+        .process-step {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 20px 0;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .process-step::before {
+            content: '';
+            position: absolute;
+            left: -35px;
+            right: -35px;
+            top: 0;
+            bottom: 0;
+            background: rgba(76, 175, 80, 0.05);
+            border-radius: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .process-step:hover::before {
+            opacity: 1;
+        }
+        
+        .checkmark {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3em;
+            flex-shrink: 0;
+            box-shadow: 
+                0 4px 12px rgba(76, 175, 80, 0.3),
+                inset 0 1px 2px rgba(255,255,255,0.2);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .process-step:hover .checkmark {
+            transform: scale(1.1) rotate(360deg);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.5);
+        }
+        
+        .process-step.inactive .checkmark {
+            background: #2a2a2a;
+            box-shadow: none;
+        }
+        
+        .step-text {
+            font-size: 1.15em;
+            color: white;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+        
+        .process-step:hover .step-text {
+            color: #4CAF50;
+            transform: translateX(4px);
+        }
+        
+        .process-step.inactive .step-text {
+            color: #555;
+        }
+        
+        .arrow {
+            text-align: center;
+            color: #4CAF50;
+            font-size: 2.5em;
+            margin: 15px 0;
+            animation: pulse 2s ease-in-out infinite;
+            text-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: translateX(0); }
+            50% { opacity: 1; transform: translateX(5px); }
+        }
+        
+        /* Bottom Section */
+        .bottom-section {
+            background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+            border-top: 1px solid rgba(76, 175, 80, 0.15);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        /* Tab Header */
+        .tab-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .tab-header h2 {
+            color: #999;
+            font-size: 1em;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+        
+        /* Spike Count */
+        .spike-count-display {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(76, 175, 80, 0.08);
+            padding: 12px 25px;
+            border-radius: 12px;
+            border: 1px solid rgba(76, 175, 80, 0.2);
+        }
+        
+        .spike-label {
+            color: #888;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        
+        .spike-count {
+            color: #4CAF50;
+            font-size: 1.8em;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        
+        .spike-unit {
+            color: #666;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        /* Upload Button Container */
+        .upload-container {
+            position: absolute;
+            bottom: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+        
+        /* Main Button */
+        .upload-btn {
+            background: linear-gradient(135deg, 
+                rgba(26, 26, 26, 0.95) 0%, 
+                rgba(20, 20, 20, 0.95) 100%);
+            border: 2px solid rgba(76, 175, 80, 0.4);
+            color: white;
+            padding: 16px 40px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 1.05em;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+            box-shadow: 
+                0 8px 25px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .upload-btn:hover {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            border-color: #4CAF50;
+            transform: translateY(-3px);
+            box-shadow: 
+                0 12px 35px rgba(76, 175, 80, 0.4),
+                inset 0 1px 0 rgba(255,255,255,0.2);
+        }
+        
+        /* Options Menu */
+        .upload-options {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, 
+                rgba(26, 26, 26, 0.98) 0%, 
+                rgba(20, 20, 20, 0.98) 100%);
+            border: 2px solid rgba(76, 175, 80, 0.3);
+            border-radius: 20px;
+            padding: 10px;
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 200px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+        
+        .upload-options.show {
+            display: flex;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        
+        .option-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 14px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+        }
+        
+        .option-btn:hover {
+            background: rgba(76, 175, 80, 0.15);
+            color: #4CAF50;
+        }
+        
+        .option-btn .icon {
+            font-size: 1.3em;
+            width: 24px;
+            text-align: center;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        canvas {
+            display: none;
+        }
+        
+        /* Camera controls */
+        .camera-controls {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 15px;
+            z-index: 10;
+        }
+        
+        .camera-controls.show {
+            display: flex;
+        }
+        
+        .camera-btn {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            border: 2px solid #f59e0b;
+            color: white;
+            padding: 14px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3);
+        }
+        
+        .camera-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+        }
+        
+        .camera-btn.stop {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border-color: #ef4444;
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+        }
+        
+        .camera-btn.stop:hover {
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+        }
+        
+        /* Loading Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .process-step {
+            animation: fadeIn 0.5s ease backwards;
+        }
+        
+        .process-step:nth-child(1) { animation-delay: 0.1s; }
+        .process-step:nth-child(2) { animation-delay: 0.2s; }
+        .process-step:nth-child(3) { animation-delay: 0.3s; }
+        .process-step:nth-child(4) { animation-delay: 0.4s; }
+        .process-step:nth-child(5) { animation-delay: 0.5s; }
+        
+        /* Status Message */
+        .status-message {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(76, 175, 80, 0.15);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            color: #4CAF50;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 20;
+        }
+        
+        .status-message.show {
+            opacity: 1;
+        }
+        
+        .status-message.error {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+        
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .process-panel {
+                width: 280px;
+                padding: 40px 25px;
+            }
+            
+            .bottom-section {
+                flex-direction: column;
+                gap: 15px;
+                padding: 20px;
+            }
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+            body {
+                overflow-y: auto;
+            }
+            
+            .container {
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                gap: 0;
+                min-height: auto;
+            }
+            
+            .image-panel {
+                min-height: 40vh;
+                height: auto;
+                border: none;
+                border-bottom: 1px solid rgba(76, 175, 80, 0.1);
+            }
+            
+            .image-panel:last-child {
+                border-bottom: none;
+            }
+            
+
+            .process-panel {
+                width: 100%;
+                padding: 30px 20px;
+                border-left: none;
+                border-right: none;
+                border-top: 1px solid rgba(76, 175, 80, 0.15);
+                border-bottom: 1px solid rgba(76, 175, 80, 0.15);
+                flex-direction: column;
+                justify-content: center;
+                background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%);
+            }
+            
+            .process-step {
+                flex-direction: row;
+                padding: 15px 10px;
+                gap: 12px;
+                text-align: left;
+            }
+            
+            .process-step::before {
+                left: -20px;
+                right: -20px;
+            }
+            
+            .checkmark {
+                width: 32px;
+                height: 32px;
+                font-size: 1.1em;
+            }
+            
+            .step-text {
+                font-size: 0.9em;
+            }
+            
+            .process-step:hover .step-text {
+                transform: translateX(4px);
+            }
+            
+            .arrow {
+                text-align: center;
+                color: #4CAF50;
+                font-size: 1.5em;
+                margin: 8px 0;
+                animation: pulse 2s ease-in-out infinite;
+                text-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+                transform: rotate(90deg);
+            }
+            
+            .bottom-section {
+                padding: 15px 20px;
+                gap: 12px;
+            }
+            
+            .tab-header h2 {
+                font-size: 0.9em;
+            }
+            
+            .spike-count-display {
+                padding: 10px 20px;
+                gap: 15px;
+            }
+            
+            .spike-label {
+                font-size: 0.8em;
+            }
+            
+            .spike-count {
+                font-size: 1.5em;
+            }
+            
+            .spike-unit {
+                font-size: 0.8em;
+            }
+            
+            .upload-container {
+                bottom: 20px;
+            }
+            
+            .upload-btn {
+                padding: 14px 30px;
+                font-size: 1em;
+            }
+            
+            .upload-options {
+                min-width: 180px;
+            }
+            
+            .option-btn {
+                padding: 12px 16px;
+                font-size: 0.95em;
+            }
+            
+            .camera-controls {
+                bottom: 80px;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .camera-btn {
+                padding: 12px 24px;
+                font-size: 0.95em;
+            }
+            
+            .status-message {
+                top: 10px;
+                font-size: 0.85em;
+                padding: 8px 16px;
+                max-width: 90%;
+            }
+        }
+        
+        /* Glow effect on detection result */
+        .image-panel:last-child::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, 
+                rgba(76, 175, 80, 0.1) 0%, 
+                transparent 70%);
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Status Message -->
+        <div class="status-message" id="statusMessage"></div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Original Image -->
+            <div class="image-panel" id="leftPanel">
+                <span class="placeholder">No image uploaded</span>
+                <img id="originalImage" alt="Original Image" style="display: none;">
+                <video id="cameraVideo" autoplay playsinline></video>
+                <canvas id="captureCanvas"></canvas>
+                
+                <!-- Camera Controls -->
+                <div class="camera-controls" id="cameraControls">
+                    <button class="camera-btn" id="captureBtn">Capture Photo</button>
+                    <button class="camera-btn stop" id="stopBtn">Stop Camera</button>
+                </div>
+                
+                <!-- Upload Container with Options -->
+                <div class="upload-container">
+                    <!-- Options Menu -->
+                    <div class="upload-options" id="uploadOptions">
+                        <button class="option-btn" onclick="handleCameraOption()">
+                            <span class="icon">📷</span>
+                            <span>Take Photo</span>
+                        </button>
+                        <button class="option-btn" onclick="document.getElementById('fileInput').click(); toggleMenu()">
+                            <span class="icon">🖼️</span>
+                            <span>Upload Image</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Main Button -->
+                    <button class="upload-btn" onclick="toggleMenu()">
+                        <span>Add Image</span>
+                        <span>▼</span>
+                    </button>
+                </div>
+                
+                <!-- Hidden File Inputs -->
+                <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handleUpload(event)">
+                <input type="file" id="fileInput" accept="image/*" onchange="handleUpload(event)">
+            </div>
+            
+            <!-- Middle Panel - Process Steps -->
+            <div class="process-panel">
+                <div class="process-step inactive" id="step1">
+                    <div class="checkmark">✓</div>
+                    <div class="step-text">Upload File</div>
+                </div>
+                
+                <div class="process-step inactive" id="step2">
+                    <div class="checkmark">✓</div>
+                    <div class="step-text">Feature Extraction</div>
+                </div>
+                
+                <div class="process-step inactive" id="step3">
+                    <div class="checkmark">✓</div>
+                    <div class="step-text">Spike Detection</div>
+                </div>
+                
+                <div class="process-step inactive" id="step4">
+                    <div class="checkmark">✓</div>
+                    <div class="step-text">Result Generation</div>
+                </div>
+                
+                <div class="process-step inactive" id="step5">
+                    <div class="checkmark">✓</div>
+                    <div class="step-text">Download Result</div>
+                </div>
+                
+                <div class="arrow">→</div>
+            </div>
+            
+            <!-- Right Panel - Detection Result -->
+            <div class="image-panel" id="rightPanel">
+                <span class="placeholder">Waiting for result...</span>
+                <img id="resultImage" alt="Detection Result" style="display: none;">
+            </div>
+        </div>
+        
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            <!-- Tab Header -->
+            <div class="tab-header">
+                <h2>🌾 Spikes Detection</h2>
+            </div>
+            
+            <!-- Spike Count -->
+            <div class="spike-count-display">
+                <span class="spike-label">Total Detected:</span>
+                <span class="spike-count" id="spikeCount">0</span>
+                <span class="spike-unit">spikes</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let stream = null;
+        let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        let currentFilename = null;
+        let resultCheckInterval = null;
+        
+        function toggleMenu() {
+            const menu = document.getElementById('uploadOptions');
+            menu.classList.toggle('show');
+        }
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const container = document.querySelector('.upload-container');
+            const menu = document.getElementById('uploadOptions');
+            if (!container.contains(event.target) && menu.classList.contains('show')) {
+                menu.classList.remove('show');
+            }
+        });
+        
+        function handleCameraOption() {
+            toggleMenu();
+            if (isMobile) {
+                document.getElementById('cameraInput').click();
+            } else {
+                startCamera();
+            }
+        }
+        
+        async function startCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showMessage('Camera not supported on this device', true);
+                return;
+            }
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' }
+                });
+                const video = document.getElementById('cameraVideo');
+                video.srcObject = stream;
+                video.classList.add('active');
+                
+                document.getElementById('leftPanel').classList.add('has-image');
+                document.getElementById('originalImage').style.display = 'none';
+                document.querySelector('#leftPanel .placeholder').style.display = 'none';
+                document.getElementById('cameraControls').classList.add('show');
+                document.querySelector('.upload-container').style.display = 'none';
+                
+                showMessage('Camera started');
+            } catch (error) {
+                showMessage('Failed to access camera: ' + error.message, true);
+            }
+        }
+        
+        document.getElementById('captureBtn').addEventListener('click', async () => {
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.getElementById('captureCanvas');
+            const context = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0);
+            
+            canvas.toBlob(async (blob) => {
+                const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+                
+                stopCamera();
+                
+                const img = document.getElementById('originalImage');
+                img.src = URL.createObjectURL(blob);
+                img.style.display = 'block';
+                
+                await uploadImage(file);
+            }, 'image/jpeg', 0.95);
+        });
+        
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            stopCamera();
+        });
+        
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            const video = document.getElementById('cameraVideo');
+            video.classList.remove('active');
+            video.srcObject = null;
+            
+            document.getElementById('cameraControls').classList.remove('show');
+            document.querySelector('.upload-container').style.display = 'block';
+        }
+        
+        async function handleUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                showMessage('Please select a valid image file', true);
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('originalImage');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                document.getElementById('leftPanel').classList.add('has-image');
+                document.querySelector('#leftPanel .placeholder').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+            
+            await uploadImage(file);
+            event.target.value = '';
+        }
+        
+        async function uploadImage(file) {
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            showMessage('Uploading...');
+            animateProcessing();
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentFilename = data.filename;
+                    showMessage('Image uploaded successfully ✓');
+                    
+                    if (data.has_result) {
+                        displayResultImage(data.filename);
+                    } else {
+                        startResultPolling(data.filename);
+                    }
+                } else {
+                    const errorText = await response.text();
+                    showMessage(errorText || 'Upload failed', true);
+                    resetProcessing();
+                }
+            } catch (error) {
+                showMessage('Upload failed: ' + error.message, true);
+                resetProcessing();
+            }
+        }
+        
+        async function displayResultImage(filename) {
+            if (resultCheckInterval) {
+                clearInterval(resultCheckInterval);
+                resultCheckInterval = null;
+            }
+            
+            const img = document.getElementById('resultImage');
+            img.src = `/results/${filename}?t=${Date.now()}`;
+            img.style.display = 'block';
+            document.getElementById('rightPanel').classList.add('has-image');
+            document.querySelector('#rightPanel .placeholder').style.display = 'none';
+            
+            // Read spike count from text file
+            await readSpikeCount(filename);
+        }
+        
+        async function readSpikeCount(filename, retryCount = 0) {
+        const maxRetries = 10; // Try for 20 seconds (10 retries * 2 seconds)
+    
+        try {
+            // Read the .txt file from counts folder
+            const response = await fetch(`/counts/${filename}?t=${Date.now()}`);
+        
+            if (response.ok) {
+                const countText = await response.text();
+                const count = parseInt(countText.trim());
+            
+                if (!isNaN(count)) {
+                    animateCount(count);
+                } else {
+                    console.error('Invalid count value in text file');
+                
+                    // Retry if count is invalid and we haven't exceeded retries
+                    if (retryCount < maxRetries) {
+                        setTimeout(() => {
+                            readSpikeCount(filename, retryCount + 1);
+                        }, 2000);
+                        return;
+                    }
+                
+                    animateCount(0);
+                }
+            } else {
+                // Count file not found, retry if we haven't exceeded max retries
+                if (retryCount < maxRetries) {
+                    console.log(`Count file not found, retrying... (${retryCount + 1}/${maxRetries})`);
+                    setTimeout(() => {
+                        readSpikeCount(filename, retryCount + 1);
+                    }, 2000);
+                    return;
+                }
+            
+                console.error('Could not read count file after max retries');
+                animateCount(0);
+            }
+        } catch (error) {
+            // On error, retry if we haven't exceeded max retries
+            if (retryCount < maxRetries) {
+                console.log(`Error reading spike count, retrying... (${retryCount + 1}/${maxRetries})`);
+                setTimeout(() => {
+                    readSpikeCount(filename, retryCount + 1);
+                }, 2000);
+                return;
+            }
+        
+            console.error('Error reading spike count after max retries:', error);
+            animateCount(0);
+        }
+    }
+        
+        function startResultPolling(filename) {
+            document.getElementById('rightPanel').classList.remove('has-image');
+            document.getElementById('resultImage').style.display = 'none';
+            document.querySelector('#rightPanel .placeholder').style.display = 'block';
+            
+            if (resultCheckInterval) {
+                clearInterval(resultCheckInterval);
+            }
+            
+            resultCheckInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/check-result/${filename}`);
+                    const data = await response.json();
+                    
+                    if (data.has_result) {
+                        displayResultImage(filename);
+                    }
+                } catch (error) {
+                    console.error('Error checking for result:', error);
+                }
+            }, 2000);
+        }
+        
+        function animateProcessing() {
+            const steps = document.querySelectorAll('.process-step');
+            steps.forEach(step => step.classList.add('inactive'));
+            
+            let delay = 0;
+            steps.forEach((step, index) => {
+                setTimeout(() => {
+                    step.classList.remove('inactive');
+                }, delay);
+                delay += 500;
+            });
+        }
+        
+        function resetProcessing() {
+            const steps = document.querySelectorAll('.process-step');
+            steps.forEach(step => step.classList.add('inactive'));
+        }
+        
+        function animateCount(targetCount) {
+            const countElement = document.getElementById('spikeCount');
+            const duration = 1000;
+            const startCount = 0;
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                const easeOut = 1 - Math.pow(1 - progress, 3);
+                const currentCount = Math.floor(startCount + (targetCount - startCount) * easeOut);
+                
+                countElement.textContent = currentCount;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                } else {
+                    countElement.textContent = targetCount;
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+        
+        function showMessage(text, isError = false) {
+            const message = document.getElementById('statusMessage');
+            message.textContent = text;
+            message.classList.toggle('error', isError);
+            message.classList.add('show');
+            
+            setTimeout(() => {
+                message.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
