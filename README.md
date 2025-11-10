@@ -38,7 +38,7 @@ After the web application is running, you can perform inference:
 ```bash
 python inference.py
 ```
- 
+ ![alt text](test_PCA.png)
 ## Prerequisites
  
 - Python 3.x
